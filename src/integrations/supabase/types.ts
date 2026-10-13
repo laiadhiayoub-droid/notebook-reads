@@ -14,7 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      lessons: {
+        Row: {
+          content_type: string
+          created_at: string
+          domain: string | null
+          id: string
+          image_path: string
+          order_index: number
+          page_number: number
+          parent_lesson_id: string | null
+          subject: string
+          title: string
+          unit: string | null
+          user_id: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          domain?: string | null
+          id?: string
+          image_path: string
+          order_index?: number
+          page_number?: number
+          parent_lesson_id?: string | null
+          subject: string
+          title: string
+          unit?: string | null
+          user_id: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          domain?: string | null
+          id?: string
+          image_path?: string
+          order_index?: number
+          page_number?: number
+          parent_lesson_id?: string | null
+          subject?: string
+          title?: string
+          unit?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_parent_lesson_id_fkey"
+            columns: ["parent_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lessons_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
