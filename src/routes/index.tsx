@@ -104,8 +104,8 @@ function Index() {
     if (!a || !b) return;
     // normalise indexes on this notebook, then swap
     const updates = visible.map((l, i) => ({ id: l.id, order_index: i }));
-    updates[index].order_index = index + dir;
-    updates[index + dir].order_index = index;
+    updates[index]!.order_index = index + dir;
+    updates[index + dir]!.order_index = index;
     const results = await Promise.all(
       updates.map((u) => supabase.from("lessons").update({ order_index: u.order_index }).eq("id", u.id)),
     );
@@ -247,7 +247,7 @@ function useSignedUrl(path: string) {
 
 function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }: {
   lesson: Lesson; parent?: Lesson; author: string; showAuthor: boolean;
-  onZoom: (u: string) => void; controls?: { up?: () => void; down?: () => void };
+  onZoom: (u: string) => void; controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
 }) {
   const url = useSignedUrl(l.image_path);
   return (
@@ -291,11 +291,11 @@ function NameDialog({ userId, onDone }: { userId: string; onDone: () => void }) 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   async function save() {
-    if (name.trim().length < 3) return toast.error("أدخل اسمك الكامل");
+    if (name.trim().length < 3) { toast.error("أدخل اسمك الكامل"); return; }
     setBusy(true);
     const { error } = await supabase.from("profiles").upsert({ id: userId, full_name: name.trim() });
     setBusy(false);
-    if (error) return toast.error("تعذّر الحفظ");
+    if (error) { toast.error("تعذّر الحفظ"); return; }
     toast.success("مرحباً بك في المكتبة!");
     onDone();
   }
@@ -330,9 +330,9 @@ function UploadDialog({ open, onOpenChange, userId, defaultSubject, myLessons, o
   const roots = notebook.filter((l) => !l.parent_lesson_id);
 
   async function submit() {
-    if (!title.trim()) return toast.error("عنوان الدرس مطلوب");
-    if (!file) return toast.error("أضف صورة الصفحة");
-    if (isCont && !parentId) return toast.error("اختر الدرس السابق");
+    if (!title.trim()) { toast.error("عنوان الدرس مطلوب"); return; }
+    if (!file) { toast.error("أضف صورة الصفحة"); return; }
+    if (isCont && !parentId) { toast.error("اختر الدرس السابق"); return; }
     setBusy(true);
     try {
       const blob = await compressImage(file);
