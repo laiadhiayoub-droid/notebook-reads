@@ -290,22 +290,34 @@ function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }:
 function NameDialog({ userId, onDone }: { userId: string; onDone: () => void }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  async function save() {
+  const [done, setDone] = useState(false);
+  async function save(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (busy) return;
     if (name.trim().length < 3) { toast.error("أدخل اسمك الكامل"); return; }
     setBusy(true);
     const { error } = await supabase.from("profiles").upsert({ id: userId, full_name: name.trim() });
     setBusy(false);
-    if (error) { toast.error("تعذّر الحفظ"); return; }
+    if (error) { toast.error("تعذّر الحفظ، حاول مجدداً"); return; }
     toast.success("مرحباً بك في المكتبة!");
+    setDone(true);
     onDone();
   }
   return (
-    <Dialog open>
-      <DialogContent onInteractOutside={(e) => e.preventDefault()} className="[&>button]:hidden">
+    <Dialog open={!done}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="[&>button.absolute]:hidden"
+      >
         <DialogHeader><DialogTitle>مرحباً! ما اسمك؟</DialogTitle></DialogHeader>
-        <Label htmlFor="fn">اسم التلميذ الكامل</Label>
-        <Input id="fn" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: أيوب بن علي" />
-        <Button onClick={save} disabled={busy}>{busy && <Loader2 className="animate-spin size-4" />} حفظ</Button>
+        <form onSubmit={save} className="space-y-3">
+          <Label htmlFor="fn">اسم التلميذ الكامل</Label>
+          <Input id="fn" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: أيوب بن علي" />
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy && <Loader2 className="animate-spin size-4" />} تأكيد والحفظ
+          </Button>
+        </form>
       </DialogContent>
     </Dialog>
   );
