@@ -226,6 +226,7 @@ function Index() {
           </ol>
         )}
       </main>
+      )}
 
       {needsName && user && <NameDialog userId={user.id} onDone={() => qc.invalidateQueries({ queryKey: ["profiles"] })} />}
       {user && (
