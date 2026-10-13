@@ -151,6 +151,16 @@ function Index() {
         </div>
       </header>
 
+      {ready && !user ? (
+        <main className="mx-auto max-w-xl px-4 py-16">
+          <div className="notebook-paper margin-line rounded-xl p-10 text-center space-y-4">
+            <BookOpen className="mx-auto size-10 text-primary" />
+            <h2 className="text-2xl font-extrabold">مكتبة كراريس القسم</h2>
+            <p className="text-muted-foreground">سجّل الدخول لتصفّح دروس وملخصات زملائك.</p>
+            <Button onClick={signIn}>تسجيل الدخول باستخدام Google</Button>
+          </div>
+        </main>
+      ) : (
       <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
         <section className="grid gap-3 sm:grid-cols-[1fr_1fr] lg:grid-cols-[220px_1fr_1.4fr]">
           <div className="space-y-1.5">
