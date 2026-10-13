@@ -246,7 +246,7 @@ function useSignedUrl(path: string) {
 }
 
 function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }: {
-  lesson: Lesson; parent?: Lesson; author: string; showAuthor: boolean;
+  lesson: Lesson; parent?: Lesson | undefined; author: string; showAuthor: boolean;
   onZoom: (u: string) => void; controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
 }) {
   const url = useSignedUrl(l.image_path);
