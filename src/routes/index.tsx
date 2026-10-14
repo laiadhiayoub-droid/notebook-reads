@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Timetable } from "@/components/Timetable";
+import { DhikrPill } from "@/components/DhikrPill";
 import { SUBJECTS, CONTENT_TYPES, subjectLabel, contentTypeLabel, compressImage } from "@/lib/library";
 
 export const Route = createFileRoute("/")({
@@ -151,6 +153,8 @@ function Index() {
         </div>
       </header>
 
+      <div className="mx-auto max-w-5xl px-4 pt-6"><Timetable /></div>
+
       {ready && !user ? (
         <main className="mx-auto max-w-xl px-4 py-16">
           <div className="notebook-paper margin-line rounded-xl p-10 text-center space-y-4">
@@ -227,6 +231,7 @@ function Index() {
         )}
       </main>
       )}
+      <DhikrPill />
 
       {needsName && user && <NameDialog userId={user.id} onDone={() => qc.invalidateQueries({ queryKey: ["profiles"] })} />}
       {user && (
