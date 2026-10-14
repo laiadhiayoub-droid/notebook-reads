@@ -76,6 +76,17 @@ function Index() {
   });
 
   const myProfile = profiles.data?.find((p) => p.id === user?.id);
+  const roles = useQuery({
+    queryKey: ["my-roles", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user!.id);
+      if (error) throw error;
+      return data.map((r) => r.role);
+    },
+  });
+  const isAdmin = !!roles.data?.includes("admin");
+  const canPublish = isAdmin || !!roles.data?.includes("writer");
   const needsName = !!user && profiles.isSuccess && !myProfile?.full_name;
 
   const [studentId, setStudentId] = useState<string>("all");
@@ -140,9 +151,20 @@ function Index() {
           {ready && (user ? (
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline text-sm text-muted-foreground">{myProfile?.full_name}</span>
-              <Button size="sm" onClick={() => setUploadOpen(true)} disabled={needsName}>
-                <Plus className="size-4" /> إضافة درس
-              </Button>
+              {isAdmin && (
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/admin"><ShieldCheck className="size-4" /> لوحة التحكم</Link>
+                </Button>
+              )}
+              {canPublish ? (
+                <Button size="sm" onClick={() => setUploadOpen(true)} disabled={needsName}>
+                  <Plus className="size-4" /> إضافة درس
+                </Button>
+              ) : roles.isSuccess && (
+                <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  <Lock className="size-3" /> النشر متاح فقط للكتّاب المعتمدين
+                </span>
+              )}
               <Button size="icon" variant="ghost" onClick={signOut} aria-label="تسجيل الخروج">
                 <LogOut className="size-4" />
               </Button>
