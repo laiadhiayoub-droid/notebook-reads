@@ -34,6 +34,9 @@
   --color-paper: var(--paper);
   --color-rule: var(--rule);
   --color-summary: var(--summary);
+  --color-school: var(--school);
+  --color-school-foreground: var(--school-foreground);
+  --color-school-soft: var(--school-soft);
   --color-summary-foreground: var(--summary-foreground);
 }
 
@@ -61,6 +64,9 @@
   --paper: oklch(0.99 0.008 90);
   --rule: oklch(0.85 0.04 240 / 40%);
   --summary: oklch(0.45 0.09 200);
+  --school: oklch(0.45 0.09 150);
+  --school-foreground: oklch(0.98 0.01 120);
+  --school-soft: oklch(0.95 0.03 100);
   --summary-foreground: oklch(0.98 0.01 200);
   --shadow-sheet: 0 1px 0 var(--border), 0 12px 30px -18px oklch(0.3 0.05 40 / 35%);
 }
