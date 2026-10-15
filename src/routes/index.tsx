@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  BookOpen, LogOut, Plus, Search, ArrowUp, ArrowDown, Link2, Loader2, ImagePlus, X, NotebookPen, ShieldCheck, Lock,
+  BookOpen, LogOut, Plus, Search, ArrowUp, ArrowDown, Link2, Loader2, ImagePlus, X, NotebookPen, ShieldCheck, Lock as LockIcon,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -162,7 +162,7 @@ function Index() {
                 </Button>
               ) : roles.isSuccess && (
                 <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                  <Lock className="size-3" /> النشر متاح فقط للكتّاب المعتمدين
+                  <LockIcon className="size-3" /> النشر متاح فقط للكتّاب المعتمدين
                 </span>
               )}
               <Button size="icon" variant="ghost" onClick={signOut} aria-label="تسجيل الخروج">
