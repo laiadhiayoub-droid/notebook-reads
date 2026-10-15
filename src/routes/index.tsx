@@ -293,7 +293,13 @@ function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }:
       <span className="absolute -start-[33px] top-5 size-4 rounded-full bg-accent ring-4 ring-background" />
       <article className="notebook-paper margin-line rounded-xl p-4 flex gap-4">
         <button className="shrink-0 w-24 h-32 sm:w-32 sm:h-40 rounded-md overflow-hidden bg-muted border"
-          onClick={() => url.data && onZoom(url.data)} aria-label="تكبير">
+          onClick={() => {
+            if (!url.data) return;
+            onZoom(url.data);
+            supabase.auth.getUser().then(({ data }) => {
+              if (data.user) supabase.from("lesson_views").insert({ lesson_id: l.id, user_id: data.user.id, subject: l.subject }).then(() => {});
+            });
+          }} aria-label="تكبير">
           {url.data ? <img src={url.data} alt={l.title} loading="lazy" className="w-full h-full object-cover" />
             : <Loader2 className="m-auto animate-spin text-muted-foreground" />}
         </button>
