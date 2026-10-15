@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      banned_users: {
+        Row: {
+          banned_at: string
+          banned_by: string | null
+          email: string
+          reason: string | null
+        }
+        Insert: {
+          banned_at?: string
+          banned_by?: string | null
+          email: string
+          reason?: string | null
+        }
+        Update: {
+          banned_at?: string
+          banned_by?: string | null
+          email?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      lesson_views: {
+        Row: {
+          id: string
+          lesson_id: string
+          subject: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          lesson_id: string
+          subject: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          lesson_id?: string
+          subject?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_views_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lessons: {
         Row: {
           content_type: string
@@ -92,6 +145,27 @@ export type Database = {
         }
         Relationships: []
       }
+      site_announcement: {
+        Row: {
+          active: boolean
+          id: number
+          message: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          id?: number
+          message?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          id?: number
+          message?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -115,6 +189,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_ban: { Args: { _email: string }; Returns: undefined }
       admin_list_users: {
         Args: never
         Returns: {
@@ -124,10 +199,36 @@ export type Database = {
           roles: Database["public"]["Enums"]["app_role"][]
         }[]
       }
+      admin_list_users_full: {
+        Args: never
+        Returns: {
+          banned: boolean
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          lessons_count: number
+          roles: Database["public"]["Enums"]["app_role"][]
+        }[]
+      }
+      admin_set_name: {
+        Args: { _name: string; _user_id: string }
+        Returns: undefined
+      }
       admin_set_writer: {
         Args: { _is_writer: boolean; _user_id: string }
         Returns: undefined
       }
+      admin_stats: {
+        Args: never
+        Returns: {
+          banned: number
+          lessons: number
+          students: number
+          top_subjects: Json
+        }[]
+      }
+      current_user_banned: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
