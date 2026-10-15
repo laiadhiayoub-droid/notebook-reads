@@ -13,12 +13,23 @@ export const PERIODS = [
 export const FREE = "فراغ";
 
 export const SCHEDULE: Record<(typeof DAYS)[number], string[]> = {
-  الأحد: [FREE, "اجتماعيات", "رياضة", FREE, "آداب", "شريعة", FREE],
-  الاثنين: ["إسبانية", "إسبانية", "إنجليزية", "شريعة", "إسبانية", "لغة عربية", "فرنسية"],
-  الثلاثاء: [FREE, "فرنسية", "إسبانية", "رياضيات", "اجتماعيات", "إنجليزية", "لغة عربية"],
-  الأربعاء: ["اجتماعيات", "رياضيات", "فرنسية", "فرنسية", "إنجليزية", "إنجليزية", FREE],
-  الخميس: ["اجتماعيات", "لغة عربية", "فرنسية", FREE, "إسبانية", "إسبانية", FREE],
+  الأحد: ["شريعة", "لغة عربية", "رياضة", "رياضة", "اجتماعيات", "إنجليزية", FREE],
+  الاثنين: ["لغة عربية", "لغة عربية", "إنجليزية", "شريعة", "إسبانية", "إسبانية", "فرنسية"],
+  الثلاثاء: [FREE, "إنجليزية", "اجتماعيات", "رياضيات", "إسبانية", "فرنسية", "لغة عربية"],
+  الأربعاء: ["إنجليزية", "إنجليزية", "فرنسية", "فرنسية", "رياضيات", "اجتماعيات", FREE],
+  الخميس: ["إسبانية", "إسبانية", "فرنسية", FREE, "لغة عربية", "اجتماعيات", FREE],
 };
+
+/** Groups consecutive identical subjects (never across lunch, between period 4 and 5) into merged blocks. */
+export function mergeRow(row: string[]) {
+  const out: { subject: string; start: number; span: number }[] = [];
+  row.forEach((subject, i) => {
+    const last = out[out.length - 1];
+    if (last && last.subject === subject && subject !== FREE && i !== 4) last.span++;
+    else out.push({ subject, start: i, span: 1 });
+  });
+  return out;
+}
 
 /** Current weekday (0=Sun) and minutes since midnight in Algeria time. */
 export function algiersNow(date = new Date()) {

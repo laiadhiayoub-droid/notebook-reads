@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickDay, SCHEDULE } from "@/lib/timetable";
+import { pickDay, SCHEDULE, mergeRow } from "@/lib/timetable";
 
 describe("timetable day selection", () => {
   it("shows today before 17:05", () => {
@@ -12,7 +12,12 @@ describe("timetable day selection", () => {
     expect(pickDay(5, 600).dayIndex).toBe(0);
     expect(pickDay(6, 600)).toEqual({ dayIndex: 0, mode: "tomorrow" });
   });
-  it("Monday period 1 is Spanish", () => {
-    expect(SCHEDULE["الاثنين"][0]).toBe("إسبانية");
+  it("Sunday period 1 is Sharia, Monday period 1 is Arabic", () => {
+    expect(SCHEDULE["الأحد"][0]).toBe("شريعة");
+    expect(SCHEDULE["الاثنين"][0]).toBe("لغة عربية");
+  });
+  it("merges Monday periods 5-6 Spanish but never across lunch", () => {
+    expect(mergeRow(SCHEDULE["الاثنين"])).toContainEqual({ subject: "إسبانية", start: 4, span: 2 });
+    expect(mergeRow(["a","b","c","x","x","d","e"]).find((b) => b.start === 4)?.span).toBe(1);
   });
 });
