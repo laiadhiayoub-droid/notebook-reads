@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   BookOpen, LogOut, Plus, Search, ArrowUp, ArrowDown, Link2, Loader2, ImagePlus, X, NotebookPen, ShieldCheck, Lock as LockIcon,
+  ArrowRight, FileText, ZoomIn, ZoomOut, Download,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,10 +91,11 @@ function Index() {
   const needsName = !!user && profiles.isSuccess && !myProfile?.full_name;
 
   const [studentId, setStudentId] = useState<string>("all");
-  const [subject, setSubject] = useState<string>("spanish");
+  const [subject, setSubject] = useState<string>("all");
   const [q, setQ] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [zoom, setZoom] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<Lesson | null>(null);
+  const [open, setOpen] = useState<{ userId: string; subject: string } | null>(null);
 
   const nameOf = (id: string) => profiles.data?.find((p) => p.id === id)?.full_name || "تلميذ";
   const uploaders = useMemo(() => {
@@ -101,21 +103,33 @@ function Index() {
     return (profiles.data ?? []).filter((p) => ids.has(p.id) && p.full_name);
   }, [lessons.data, profiles.data]);
 
-  const visible = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (lessons.data ?? []).filter((l) =>
-      l.subject === subject &&
-      (studentId === "all" || l.user_id === studentId) &&
-      (!term || [l.title, l.domain, l.unit].some((v) => v?.toLowerCase().includes(term))),
-    );
-  }, [lessons.data, subject, studentId, q]);
+  const term = q.trim().toLowerCase();
+  const matches = (l: Lesson) => !term || [l.title, l.domain, l.unit].some((v) => v?.toLowerCase().includes(term));
 
-  const isOwnerView = !!user && studentId === user.id;
+  const notebooks = useMemo(() => {
+    const map = new Map<string, { userId: string; subject: string; count: number }>();
+    for (const l of lessons.data ?? []) {
+      if (subject !== "all" && l.subject !== subject) continue;
+      if (studentId !== "all" && l.user_id !== studentId) continue;
+      if (!matches(l)) continue;
+      const k = `${l.user_id}|${l.subject}`;
+      const e = map.get(k) ?? { userId: l.user_id, subject: l.subject, count: 0 };
+      e.count++; map.set(k, e);
+    }
+    return [...map.values()];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessons.data, subject, studentId, term]);
+
+  const visible = useMemo(() => !open ? [] : (lessons.data ?? []).filter((l) =>
+    l.user_id === open.userId && l.subject === open.subject && matches(l)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  [lessons.data, open, term]);
+
+  const isOwnerView = !!user && open?.userId === user.id && !term;
 
   async function move(index: number, dir: -1 | 1) {
     const a = visible[index], b = visible[index + dir];
     if (!a || !b) return;
-    // normalise indexes on this notebook, then swap
     const updates = visible.map((l, i) => ({ id: l.id, order_index: i }));
     updates[index]!.order_index = index + dir;
     updates[index + dir]!.order_index = index;
@@ -213,8 +227,8 @@ function Index() {
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1 lg:row-start-1 lg:col-start-3">
             <Label>اختر الكراس</Label>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {SUBJECTS.map((s) => (
-                <button key={s.id} onClick={() => setSubject(s.id)}
+              {[{ id: "all", label: "كل المواد" }, ...SUBJECTS].map((s) => (
+                <button key={s.id} onClick={() => { setSubject(s.id); setOpen(null); }}
                   className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${subject === s.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-secondary"}`}>
                   {s.label}
                 </button>
@@ -223,33 +237,62 @@ function Index() {
           </div>
         </section>
 
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-extrabold">
-            كراس {subjectLabel(subject).replace("اللغة ", "")}
-            {studentId !== "all" && <span className="text-primary"> الخاص بـ {nameOf(studentId)}</span>}
-          </h2>
-          <span className="text-sm text-muted-foreground">{visible.length} صفحة</span>
-        </div>
-
         {lessons.isLoading ? (
           <div className="py-20 grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>
-        ) : visible.length === 0 ? (
-          <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">
-            <NotebookPen className="mx-auto mb-3 size-8" />
-            لا توجد دروس في هذا الكراس بعد.
-          </div>
+        ) : !open ? (
+          <>
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-xl font-extrabold">الكراريس</h2>
+              <span className="text-sm text-muted-foreground">{notebooks.length} كراس</span>
+            </div>
+            {notebooks.length === 0 ? (
+              <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">
+                <NotebookPen className="mx-auto mb-3 size-8" /> لا توجد كراريس بعد.
+              </div>
+            ) : (
+              <div className="grid gap-5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                {notebooks.map((n) => (
+                  <button key={`${n.userId}|${n.subject}`} onClick={() => setOpen({ userId: n.userId, subject: n.subject })}
+                    className="group relative aspect-[3/4] rounded-e-xl rounded-s-sm bg-primary text-primary-foreground text-start shadow-md transition hover:-translate-y-1 hover:shadow-xl overflow-hidden">
+                    <span className="absolute inset-y-0 start-0 w-3 bg-foreground/20" />
+                    <div className="absolute inset-0 ps-6 pe-4 py-5 flex flex-col">
+                      <BookOpen className="size-5 opacity-70" />
+                      <h3 className="mt-auto text-xl font-extrabold leading-tight">{subjectLabel(n.subject)}</h3>
+                      <p className="mt-2 text-sm opacity-80 truncate">{nameOf(n.userId)}</p>
+                      <span className="mt-3 self-start rounded-full bg-background/90 text-foreground px-2.5 py-0.5 text-xs font-bold">
+                        {n.count} درس
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <ol className="relative space-y-5 border-s-2 border-dashed ps-6">
-            {visible.map((l, i) => (
-              <LessonCard key={l.id} lesson={l} parent={lessons.data?.find((p) => p.id === l.parent_lesson_id)}
-                author={nameOf(l.user_id)} showAuthor={studentId === "all"}
-                onZoom={setZoom}
-                controls={isOwnerView ? {
-                  up: i > 0 ? () => move(i, -1) : undefined,
-                  down: i < visible.length - 1 ? () => move(i, 1) : undefined,
-                } : undefined} />
-            ))}
-          </ol>
+          <>
+            <div className="flex items-center gap-3">
+              <Button size="icon" variant="outline" onClick={() => setOpen(null)} aria-label="رجوع"><ArrowRight className="size-4" /></Button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-extrabold truncate">كراس {subjectLabel(open.subject)}</h2>
+                <p className="text-sm text-muted-foreground">{nameOf(open.userId)} · {visible.length} درس</p>
+              </div>
+            </div>
+            {visible.length === 0 ? (
+              <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">لا توجد دروس مطابقة.</div>
+            ) : (
+              <ol className="rounded-xl border bg-card divide-y overflow-hidden">
+                {visible.map((l, i) => (
+                  <LessonRow key={l.id} index={i + 1} lesson={l}
+                    parent={lessons.data?.find((p) => p.id === l.parent_lesson_id)}
+                    onOpen={() => setZoom(l)}
+                    controls={isOwnerView ? {
+                      up: i > 0 ? () => move(i, -1) : undefined,
+                      down: i < visible.length - 1 ? () => move(i, 1) : undefined,
+                    } : undefined} />
+                ))}
+              </ol>
+            )}
+          </>
         )}
       </main>
       )}
@@ -258,75 +301,96 @@ function Index() {
       {needsName && user && <NameDialog userId={user.id} onDone={() => qc.invalidateQueries({ queryKey: ["profiles"] })} />}
       {user && (
         <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} userId={user.id}
-          defaultSubject={subject} myLessons={(lessons.data ?? []).filter((l) => l.user_id === user.id)}
+          defaultSubject={subject === "all" ? "spanish" : subject} myLessons={(lessons.data ?? []).filter((l) => l.user_id === user.id)}
           onDone={() => qc.invalidateQueries({ queryKey: ["lessons"] })} />
       )}
-      <Dialog open={!!zoom} onOpenChange={(o) => !o && setZoom(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-2 bg-foreground border-0">
-          <DialogTitle className="sr-only">صورة الصفحة</DialogTitle>
-          {zoom && <img src={zoom} alt="" className="max-h-[90vh] w-auto mx-auto object-contain" />}
-        </DialogContent>
-      </Dialog>
+      <ImageModal lesson={zoom} onClose={() => setZoom(null)} />
     </div>
   );
 }
 
-function useSignedUrl(path: string) {
-  return useQuery({
-    queryKey: ["img", path],
+function ImageModal({ lesson, onClose }: { lesson: Lesson | null; onClose: () => void }) {
+  const [zoomed, setZoomed] = useState(false);
+  const url = useQuery({
+    queryKey: ["img", lesson?.image_path],
+    enabled: !!lesson,
     staleTime: 50 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from("lessons-images").createSignedUrl(path, 3600);
+      const { data, error } = await supabase.storage.from("lessons-images").createSignedUrl(lesson!.image_path, 3600);
       if (error) throw error;
       return data.signedUrl;
     },
   });
+  useEffect(() => {
+    setZoomed(false);
+    if (!lesson) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) supabase.from("lesson_views").insert({ lesson_id: lesson.id, user_id: data.user.id, subject: lesson.subject }).then(() => {});
+    });
+  }, [lesson]);
+
+  async function download() {
+    if (!lesson) return;
+    const { data, error } = await supabase.storage.from("lessons-images").download(lesson.image_path);
+    if (error || !data) { toast.error("تعذّر التحميل"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(data);
+    a.download = `${lesson.title}.jpg`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  return (
+    <Dialog open={!!lesson} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[95vw] w-[95vw] h-[92vh] p-0 flex flex-col gap-0 overflow-hidden">
+        <div className="flex items-center gap-2 border-b px-4 py-2 pe-12">
+          <DialogTitle className="flex-1 truncate text-base">{lesson?.title}</DialogTitle>
+          <Button size="sm" variant="outline" onClick={() => setZoomed((z) => !z)}>
+            {zoomed ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />} {zoomed ? "تصغير" : "تكبير"}
+          </Button>
+          <Button size="sm" onClick={download}><Download className="size-4" /> تحميل</Button>
+        </div>
+        <div className="flex-1 overflow-auto bg-muted">
+          {url.data ? (
+            <img src={url.data} alt={lesson?.title ?? ""} onClick={() => setZoomed((z) => !z)}
+              className={zoomed ? "max-w-none w-[200%] cursor-zoom-out" : "max-h-full max-w-full mx-auto object-contain cursor-zoom-in"} />
+          ) : <div className="h-full grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }: {
-  lesson: Lesson; parent?: Lesson | undefined; author: string; showAuthor: boolean;
-  onZoom: (u: string) => void; controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
+function LessonRow({ index, lesson: l, parent, onOpen, controls }: {
+  index: number; lesson: Lesson; parent?: Lesson | undefined; onOpen: () => void;
+  controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
 }) {
-  const url = useSignedUrl(l.image_path);
+  const meta = [l.domain, l.unit].filter(Boolean).join(" · ");
   return (
-    <li className="relative">
-      <span className="absolute -start-[33px] top-5 size-4 rounded-full bg-accent ring-4 ring-background" />
-      <article className="notebook-paper margin-line rounded-xl p-4 flex gap-4">
-        <button className="shrink-0 w-24 h-32 sm:w-32 sm:h-40 rounded-md overflow-hidden bg-muted border"
-          onClick={() => {
-            if (!url.data) return;
-            onZoom(url.data);
-            supabase.auth.getUser().then(({ data }) => {
-              if (data.user) supabase.from("lesson_views").insert({ lesson_id: l.id, user_id: data.user.id, subject: l.subject }).then(() => {});
-            });
-          }} aria-label="تكبير">
-          {url.data ? <img src={url.data} alt={l.title} loading="lazy" className="w-full h-full object-cover" />
-            : <Loader2 className="m-auto animate-spin text-muted-foreground" />}
-        </button>
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge className={l.content_type === "summary" ? "bg-summary text-summary-foreground" : ""}>
-              {contentTypeLabel(l.content_type)}
-            </Badge>
-            {l.unit && <Badge variant="outline">{l.unit}</Badge>}
-            <Badge variant="secondary">صفحة {l.page_number}</Badge>
-          </div>
-          <h3 className="font-bold text-lg leading-snug">{l.title}</h3>
-          {l.domain && <p className="text-sm text-muted-foreground">الميدان: {l.domain}</p>}
-          {parent && (
-            <p className="text-sm text-primary flex items-center gap-1"><Link2 className="size-3.5" /> تتمة للدرس: {parent.title}</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {showAuthor && <>{author} · </>}{new Date(l.created_at).toLocaleDateString("ar-DZ")}
-          </p>
+    <li className="flex items-center gap-3 px-3 py-3 hover:bg-secondary/60 transition">
+      <button onClick={onOpen} className="flex flex-1 min-w-0 items-center gap-3 text-start">
+        <span className="w-6 text-center text-sm text-muted-foreground tabular-nums">{index}</span>
+        <span className="size-10 shrink-0 rounded-lg bg-secondary grid place-items-center text-primary"><FileText className="size-5" /></span>
+        <span className="flex-1 min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="font-bold truncate">{l.title}</span>
+            {l.content_type === "summary" && <Badge className="bg-summary text-summary-foreground">{contentTypeLabel(l.content_type)}</Badge>}
+          </span>
+          <span className="block text-xs text-muted-foreground truncate">
+            {meta || "—"}{parent && <> · <Link2 className="inline size-3" /> تتمة: {parent.title}</>}
+          </span>
+        </span>
+        <span className="shrink-0 text-end">
+          <Badge variant="secondary">صفحة {l.page_number}</Badge>
+          <span className="block text-[11px] text-muted-foreground mt-1">{new Date(l.created_at).toLocaleDateString("ar-DZ")}</span>
+        </span>
+      </button>
+      {controls && (
+        <div className="flex flex-col gap-1">
+          <Button size="icon" variant="ghost" className="size-7" disabled={!controls.up} onClick={controls.up} aria-label="للأعلى"><ArrowUp className="size-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="size-7" disabled={!controls.down} onClick={controls.down} aria-label="للأسفل"><ArrowDown className="size-3.5" /></Button>
         </div>
-        {controls && (
-          <div className="flex flex-col gap-1">
-            <Button size="icon" variant="outline" disabled={!controls.up} onClick={controls.up} aria-label="للأعلى"><ArrowUp className="size-4" /></Button>
-            <Button size="icon" variant="outline" disabled={!controls.down} onClick={controls.down} aria-label="للأسفل"><ArrowDown className="size-4" /></Button>
-          </div>
-        )}
-      </article>
+      )}
     </li>
   );
 }
