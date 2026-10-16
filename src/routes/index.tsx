@@ -90,10 +90,11 @@ function Index() {
   const needsName = !!user && profiles.isSuccess && !myProfile?.full_name;
 
   const [studentId, setStudentId] = useState<string>("all");
-  const [subject, setSubject] = useState<string>("spanish");
+  const [subject, setSubject] = useState<string>("all");
   const [q, setQ] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [zoom, setZoom] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<Lesson | null>(null);
+  const [open, setOpen] = useState<{ userId: string; subject: string } | null>(null);
 
   const nameOf = (id: string) => profiles.data?.find((p) => p.id === id)?.full_name || "تلميذ";
   const uploaders = useMemo(() => {
@@ -101,21 +102,33 @@ function Index() {
     return (profiles.data ?? []).filter((p) => ids.has(p.id) && p.full_name);
   }, [lessons.data, profiles.data]);
 
-  const visible = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (lessons.data ?? []).filter((l) =>
-      l.subject === subject &&
-      (studentId === "all" || l.user_id === studentId) &&
-      (!term || [l.title, l.domain, l.unit].some((v) => v?.toLowerCase().includes(term))),
-    );
-  }, [lessons.data, subject, studentId, q]);
+  const term = q.trim().toLowerCase();
+  const matches = (l: Lesson) => !term || [l.title, l.domain, l.unit].some((v) => v?.toLowerCase().includes(term));
 
-  const isOwnerView = !!user && studentId === user.id;
+  const notebooks = useMemo(() => {
+    const map = new Map<string, { userId: string; subject: string; count: number }>();
+    for (const l of lessons.data ?? []) {
+      if (subject !== "all" && l.subject !== subject) continue;
+      if (studentId !== "all" && l.user_id !== studentId) continue;
+      if (!matches(l)) continue;
+      const k = `${l.user_id}|${l.subject}`;
+      const e = map.get(k) ?? { userId: l.user_id, subject: l.subject, count: 0 };
+      e.count++; map.set(k, e);
+    }
+    return [...map.values()];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessons.data, subject, studentId, term]);
+
+  const visible = useMemo(() => !open ? [] : (lessons.data ?? []).filter((l) =>
+    l.user_id === open.userId && l.subject === open.subject && matches(l)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  [lessons.data, open, term]);
+
+  const isOwnerView = !!user && open?.userId === user.id && !term;
 
   async function move(index: number, dir: -1 | 1) {
     const a = visible[index], b = visible[index + dir];
     if (!a || !b) return;
-    // normalise indexes on this notebook, then swap
     const updates = visible.map((l, i) => ({ id: l.id, order_index: i }));
     updates[index]!.order_index = index + dir;
     updates[index + dir]!.order_index = index;
