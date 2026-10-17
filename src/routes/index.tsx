@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  BookOpen, LogOut, Plus, Search, ArrowUp, ArrowDown, Link2, Loader2, ImagePlus, X, NotebookPen, ShieldCheck, Lock as LockIcon,
+  BookOpen, LogOut, Plus, Search, ArrowUp, ArrowDown, Link2, Loader2, ImagePlus, X,
+  NotebookPen, ShieldCheck, Lock as LockIcon, BookMarked, FileText, ArrowRight,
+  ZoomIn, ZoomOut, Download,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +43,7 @@ type Lesson = {
   parent_lesson_id: string | null; image_path: string; order_index: number; created_at: string;
 };
 type Profile = { id: string; full_name: string | null };
+type Book = { userId: string; subject: string; count: number };
 
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
@@ -93,7 +96,8 @@ function Index() {
   const [subject, setSubject] = useState<string>("spanish");
   const [q, setQ] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [zoom, setZoom] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<Lesson | null>(null);
+  const [openBook, setOpenBook] = useState<Book | null>(null);
 
   const nameOf = (id: string) => profiles.data?.find((p) => p.id === id)?.full_name || "تلميذ";
   const uploaders = useMemo(() => {
@@ -101,22 +105,35 @@ function Index() {
     return (profiles.data ?? []).filter((p) => ids.has(p.id) && p.full_name);
   }, [lessons.data, profiles.data]);
 
-  const visible = useMemo(() => {
+  // Tier 1: book covers — one card per (student, subject) notebook
+  const books = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return (lessons.data ?? []).filter((l) =>
-      l.subject === subject &&
-      (studentId === "all" || l.user_id === studentId) &&
-      (!term || [l.title, l.domain, l.unit].some((v) => v?.toLowerCase().includes(term))),
-    );
-  }, [lessons.data, subject, studentId, q]);
+    const map = new Map<string, Book>();
+    for (const l of lessons.data ?? []) {
+      if (studentId !== "all" && l.user_id !== studentId) continue;
+      if (subject !== "all" && l.subject !== subject) continue;
+      if (term && ![l.title, l.domain, l.unit, nameOf(l.user_id)].some((v) => v?.toLowerCase().includes(term))) continue;
+      const key = `${l.user_id}:${l.subject}`;
+      const b = map.get(key) ?? { userId: l.user_id, subject: l.subject, count: 0 };
+      b.count++;
+      map.set(key, b);
+    }
+    return [...map.values()].sort((a, b) => nameOf(a.userId).localeCompare(nameOf(b.userId), "ar"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessons.data, studentId, subject, q, profiles.data]);
 
-  const isOwnerView = !!user && studentId === user.id;
+  // Tier 2: lessons inside the open book
+  const bookLessons = useMemo(() => {
+    if (!openBook) return [];
+    return (lessons.data ?? []).filter((l) => l.user_id === openBook.userId && l.subject === openBook.subject);
+  }, [lessons.data, openBook]);
+
+  const isOwnerBook = !!user && openBook?.userId === user.id;
 
   async function move(index: number, dir: -1 | 1) {
-    const a = visible[index], b = visible[index + dir];
+    const a = bookLessons[index], b = bookLessons[index + dir];
     if (!a || !b) return;
-    // normalise indexes on this notebook, then swap
-    const updates = visible.map((l, i) => ({ id: l.id, order_index: i }));
+    const updates = bookLessons.map((l, i) => ({ id: l.id, order_index: i }));
     updates[index]!.order_index = index + dir;
     updates[index + dir]!.order_index = index;
     const results = await Promise.all(
@@ -134,6 +151,7 @@ function Index() {
   async function signOut() {
     await supabase.auth.signOut();
     setStudentId("all");
+    setOpenBook(null);
     toast("تم تسجيل الخروج");
   }
 
@@ -188,68 +206,104 @@ function Index() {
         </main>
       ) : (
       <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-        <section className="grid gap-3 sm:grid-cols-[1fr_1fr] lg:grid-cols-[220px_1fr_1.4fr]">
-          <div className="space-y-1.5">
-            <Label>اختر التلميذ</Label>
-            <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع التلاميذ</SelectItem>
-                {user && myProfile?.full_name && <SelectItem value={user.id}>كراريسي ({myProfile.full_name})</SelectItem>}
-                {uploaders.filter((p) => p.id !== user?.id).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+        {openBook ? (
+          /* ============ Tier 2: Lesson List View (داخل الكراس) ============ */
+          <section className="space-y-5">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setOpenBook(null)}>
+                <ArrowRight className="size-4" /> كل الكراريس
+              </Button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-extrabold leading-tight">
+                  كراس {subjectLabel(openBook.subject).replace("اللغة ", "")}
+                  <span className="text-primary"> — {nameOf(openBook.userId)}</span>
+                </h2>
+                <p className="text-sm text-muted-foreground">{bookLessons.length} صفحة</p>
+              </div>
+            </div>
+
+            {bookLessons.length === 0 ? (
+              <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">
+                <NotebookPen className="mx-auto mb-3 size-8" />
+                لا توجد دروس في هذا الكراس بعد.
+              </div>
+            ) : (
+              <ol className="space-y-2">
+                {bookLessons.map((l, i) => (
+                  <LessonRow key={l.id} lesson={l}
+                    parent={lessons.data?.find((p) => p.id === l.parent_lesson_id)}
+                    onOpen={() => setZoom(l)}
+                    controls={isOwnerBook ? {
+                      up: i > 0 ? () => move(i, -1) : undefined,
+                      down: i < bookLessons.length - 1 ? () => move(i, 1) : undefined,
+                    } : undefined} />
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>ابحث</Label>
-            <div className="relative">
-              <Search className="size-4 absolute top-1/2 -translate-y-1/2 start-3 text-muted-foreground" />
-              <Input className="ps-9 bg-card" value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder="ابحث عن درس محدد (مثلاً: درس غبت فيه...)" />
-            </div>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1 lg:row-start-1 lg:col-start-3">
-            <Label>اختر الكراس</Label>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {SUBJECTS.map((s) => (
-                <button key={s.id} onClick={() => setSubject(s.id)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${subject === s.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-secondary"}`}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-extrabold">
-            كراس {subjectLabel(subject).replace("اللغة ", "")}
-            {studentId !== "all" && <span className="text-primary"> الخاص بـ {nameOf(studentId)}</span>}
-          </h2>
-          <span className="text-sm text-muted-foreground">{visible.length} صفحة</span>
-        </div>
-
-        {lessons.isLoading ? (
-          <div className="py-20 grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>
-        ) : visible.length === 0 ? (
-          <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">
-            <NotebookPen className="mx-auto mb-3 size-8" />
-            لا توجد دروس في هذا الكراس بعد.
-          </div>
+              </ol>
+            )}
+          </section>
         ) : (
-          <ol className="relative space-y-5 border-s-2 border-dashed ps-6">
-            {visible.map((l, i) => (
-              <LessonCard key={l.id} lesson={l} parent={lessons.data?.find((p) => p.id === l.parent_lesson_id)}
-                author={nameOf(l.user_id)} showAuthor={studentId === "all"}
-                onZoom={setZoom}
-                controls={isOwnerView ? {
-                  up: i > 0 ? () => move(i, -1) : undefined,
-                  down: i < visible.length - 1 ? () => move(i, 1) : undefined,
-                } : undefined} />
-            ))}
-          </ol>
+          /* ============ Tier 1: Book Covers (أغلفة الكراريس) ============ */
+          <>
+            <section className="grid gap-3 sm:grid-cols-[1fr_1fr] lg:grid-cols-[220px_1fr_1.4fr]">
+              <div className="space-y-1.5">
+                <Label>اختر التلميذ</Label>
+                <Select value={studentId} onValueChange={setStudentId}>
+                  <SelectTrigger className="bg-card"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع التلاميذ</SelectItem>
+                    {user && myProfile?.full_name && <SelectItem value={user.id}>كراريسي ({myProfile.full_name})</SelectItem>}
+                    {uploaders.filter((p) => p.id !== user?.id).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>ابحث</Label>
+                <div className="relative">
+                  <Search className="size-4 absolute top-1/2 -translate-y-1/2 start-3 text-muted-foreground" />
+                  <Input className="ps-9 bg-card" value={q} onChange={(e) => setQ(e.target.value)}
+                    placeholder="ابحث عن درس محدد (مثلاً: درس غبت فيه...)" />
+                </div>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1 lg:row-start-1 lg:col-start-3">
+                <Label>اختر الكراس</Label>
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  <button onClick={() => setSubject("all")}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${subject === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-secondary"}`}>
+                    كل المواد
+                  </button>
+                  {SUBJECTS.map((s) => (
+                    <button key={s.id} onClick={() => setSubject(s.id)}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition ${subject === s.id ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-secondary"}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-xl font-extrabold">كراريس القسم</h2>
+              <span className="text-sm text-muted-foreground">{books.length} كراس</span>
+            </div>
+
+            {lessons.isLoading ? (
+              <div className="py-20 grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>
+            ) : books.length === 0 ? (
+              <div className="notebook-paper margin-line rounded-xl p-12 text-center text-muted-foreground">
+                <NotebookPen className="mx-auto mb-3 size-8" />
+                لا توجد كراريس مطابقة بعد.
+              </div>
+            ) : (
+              <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                {books.map((b) => (
+                  <BookCover key={`${b.userId}:${b.subject}`} book={b} author={nameOf(b.userId)}
+                    onOpen={() => setOpenBook(b)} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
       )}
@@ -258,76 +312,136 @@ function Index() {
       {needsName && user && <NameDialog userId={user.id} onDone={() => qc.invalidateQueries({ queryKey: ["profiles"] })} />}
       {user && (
         <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} userId={user.id}
-          defaultSubject={subject} myLessons={(lessons.data ?? []).filter((l) => l.user_id === user.id)}
+          defaultSubject={subject === "all" ? "spanish" : subject}
+          myLessons={(lessons.data ?? []).filter((l) => l.user_id === user.id)}
           onDone={() => qc.invalidateQueries({ queryKey: ["lessons"] })} />
       )}
-      <Dialog open={!!zoom} onOpenChange={(o) => !o && setZoom(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-2 bg-foreground border-0">
-          <DialogTitle className="sr-only">صورة الصفحة</DialogTitle>
-          {zoom && <img src={zoom} alt="" className="max-h-[90vh] w-auto mx-auto object-contain" />}
-        </DialogContent>
-      </Dialog>
+      <ImageModal lesson={zoom} onClose={() => setZoom(null)} />
     </div>
   );
 }
 
-function useSignedUrl(path: string) {
-  return useQuery({
-    queryKey: ["img", path],
+/* ---------- Tier 1: minimal book cover ---------- */
+function BookCover({ book, author, onOpen }: { book: Book; author: string; onOpen: () => void }) {
+  const sub = SUBJECTS.find((s) => s.id === book.subject);
+  return (
+    <button onClick={onOpen}
+      className="group relative text-start rounded-xl border bg-card overflow-hidden transition hover:shadow-lg hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary">
+      <div className="absolute inset-y-0 start-0 w-2 bg-primary/80" />
+      <div className="p-5 ps-7 space-y-4 min-h-40 flex flex-col">
+        <BookMarked className="size-7 text-primary" />
+        <div className="flex-1 space-y-1">
+          <h3 className="font-extrabold text-base leading-snug">{sub?.label ?? book.subject}</h3>
+          {sub?.sub && <p className="text-xs text-muted-foreground" dir="ltr">{sub.sub}</p>}
+          <p className="text-sm text-muted-foreground pt-1">✍️ {author}</p>
+        </div>
+        <Badge variant="secondary" className="self-start">{book.count} {book.count > 2 ? "دروس" : "درس"}</Badge>
+      </div>
+    </button>
+  );
+}
+
+/* ---------- Tier 2: clean lesson row (no thumbnail) ---------- */
+function LessonRow({ lesson: l, parent, onOpen, controls }: {
+  lesson: Lesson; parent?: Lesson | undefined;
+  onOpen: () => void;
+  controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
+}) {
+  return (
+    <li className="flex items-center gap-2">
+      <button onClick={onOpen}
+        className="flex-1 min-w-0 flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-start transition hover:bg-secondary/60 hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary">
+        <span className="shrink-0 size-9 rounded-md bg-primary/10 text-primary grid place-items-center">
+          <FileText className="size-4.5" />
+        </span>
+        <span className="flex-1 min-w-0 space-y-0.5">
+          <span className="block font-bold truncate">{l.title}</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <Badge className={`text-[10px] px-1.5 py-0 ${l.content_type === "summary" ? "bg-summary text-summary-foreground" : ""}`}>
+              {contentTypeLabel(l.content_type)}
+            </Badge>
+            {l.unit && <span>{l.unit}</span>}
+            {l.domain && <span>· {l.domain}</span>}
+            {parent && <span className="text-primary inline-flex items-center gap-0.5"><Link2 className="size-3" /> تتمة: {parent.title}</span>}
+          </span>
+        </span>
+        <span className="shrink-0 text-end text-xs text-muted-foreground space-y-0.5">
+          <Badge variant="outline" className="block">صفحة {l.page_number}</Badge>
+          <span className="block">{new Date(l.created_at).toLocaleDateString("ar-DZ")}</span>
+        </span>
+      </button>
+      {controls && (
+        <span className="flex flex-col gap-1 shrink-0">
+          <Button size="icon" variant="outline" className="size-7" disabled={!controls.up}
+            onClick={controls.up} aria-label="للأعلى"><ArrowUp className="size-3.5" /></Button>
+          <Button size="icon" variant="outline" className="size-7" disabled={!controls.down}
+            onClick={controls.down} aria-label="للأسفل"><ArrowDown className="size-3.5" /></Button>
+        </span>
+      )}
+    </li>
+  );
+}
+
+/* ---------- Tier 3: full image modal with zoom & download ---------- */
+function ImageModal({ lesson, onClose }: { lesson: Lesson | null; onClose: () => void }) {
+  const [scale, setScale] = useState(1);
+  useEffect(() => { setScale(1); }, [lesson?.id]);
+
+  const url = useQuery({
+    queryKey: ["img", lesson?.image_path],
+    enabled: !!lesson,
     staleTime: 50 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from("lessons-images").createSignedUrl(path, 3600);
+      const { data, error } = await supabase.storage.from("lessons-images").createSignedUrl(lesson!.image_path, 3600);
       if (error) throw error;
       return data.signedUrl;
     },
   });
-}
 
-function LessonCard({ lesson: l, parent, author, showAuthor, onZoom, controls }: {
-  lesson: Lesson; parent?: Lesson | undefined; author: string; showAuthor: boolean;
-  onZoom: (u: string) => void; controls?: { up: (() => void) | undefined; down: (() => void) | undefined } | undefined;
-}) {
-  const url = useSignedUrl(l.image_path);
+  function trackView() {
+    if (!lesson) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) supabase.from("lesson_views").insert({ lesson_id: lesson.id, user_id: data.user.id, subject: lesson.subject }).then(() => {});
+    });
+  }
+
   return (
-    <li className="relative">
-      <span className="absolute -start-[33px] top-5 size-4 rounded-full bg-accent ring-4 ring-background" />
-      <article className="notebook-paper margin-line rounded-xl p-4 flex gap-4">
-        <button className="shrink-0 w-24 h-32 sm:w-32 sm:h-40 rounded-md overflow-hidden bg-muted border"
-          onClick={() => {
-            if (!url.data) return;
-            onZoom(url.data);
-            supabase.auth.getUser().then(({ data }) => {
-              if (data.user) supabase.from("lesson_views").insert({ lesson_id: l.id, user_id: data.user.id, subject: l.subject }).then(() => {});
-            });
-          }} aria-label="تكبير">
-          {url.data ? <img src={url.data} alt={l.title} loading="lazy" className="w-full h-full object-cover" />
-            : <Loader2 className="m-auto animate-spin text-muted-foreground" />}
-        </button>
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge className={l.content_type === "summary" ? "bg-summary text-summary-foreground" : ""}>
-              {contentTypeLabel(l.content_type)}
-            </Badge>
-            {l.unit && <Badge variant="outline">{l.unit}</Badge>}
-            <Badge variant="secondary">صفحة {l.page_number}</Badge>
-          </div>
-          <h3 className="font-bold text-lg leading-snug">{l.title}</h3>
-          {l.domain && <p className="text-sm text-muted-foreground">الميدان: {l.domain}</p>}
-          {parent && (
-            <p className="text-sm text-primary flex items-center gap-1"><Link2 className="size-3.5" /> تتمة للدرس: {parent.title}</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {showAuthor && <>{author} · </>}{new Date(l.created_at).toLocaleDateString("ar-DZ")}
-          </p>
-        </div>
-        {controls && (
-          <div className="flex flex-col gap-1">
-            <Button size="icon" variant="outline" disabled={!controls.up} onClick={controls.up} aria-label="للأعلى"><ArrowUp className="size-4" /></Button>
-            <Button size="icon" variant="outline" disabled={!controls.down} onClick={controls.down} aria-label="للأسفل"><ArrowDown className="size-4" /></Button>
+    <Dialog open={!!lesson} onOpenChange={(o) => { if (!o) onClose(); else trackView(); }}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-foreground border-0 overflow-hidden">
+        <DialogTitle className="sr-only">{lesson?.title ?? "صورة الصفحة"}</DialogTitle>
+        {lesson && (
+          <div className="flex flex-col max-h-[95vh]">
+            <div className="flex items-center gap-2 p-2 text-background">
+              <span className="flex-1 min-w-0 truncate text-sm font-bold px-2">{lesson.title}</span>
+              <Button size="icon" variant="ghost" className="text-background hover:bg-background/20"
+                onClick={() => setScale((s) => Math.min(3, +(s + 0.25).toFixed(2)))} aria-label="تكبير">
+                <ZoomIn className="size-4" />
+              </Button>
+              <Button size="icon" variant="ghost" className="text-background hover:bg-background/20"
+                onClick={() => setScale((s) => Math.max(0.5, +(s - 0.25).toFixed(2)))} aria-label="تصغير">
+                <ZoomOut className="size-4" />
+              </Button>
+              {url.data && (
+                <Button size="icon" variant="ghost" className="text-background hover:bg-background/20" asChild>
+                  <a href={url.data} download={`${lesson.title}.jpg`} target="_blank" rel="noreferrer" aria-label="تحميل">
+                    <Download className="size-4" />
+                  </a>
+                </Button>
+              )}
+            </div>
+            <div className="flex-1 overflow-auto grid place-items-center p-2">
+              {url.data ? (
+                <img src={url.data} alt={lesson.title}
+                  style={{ transform: `scale(${scale})`, transformOrigin: "center top" }}
+                  className="max-h-[80vh] w-auto object-contain transition-transform" />
+              ) : (
+                <Loader2 className="animate-spin text-background my-20" />
+              )}
+            </div>
           </div>
         )}
-      </article>
-    </li>
+      </DialogContent>
+    </Dialog>
   );
 }
 
